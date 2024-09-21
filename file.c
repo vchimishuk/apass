@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include "crypt.h"
 #include "exit.h"
@@ -15,9 +16,6 @@
 // +-------------------------+      +- encrypted
 // |        records          |      |
 // +-------------------------+  ----+
-
-// TODO: Checksum support.
-#define CHECKSUM_SIZE 32
 
 static void serialize(char **buf, size_t *size, struct record **records)
 {
@@ -129,24 +127,35 @@ struct record **file_read(char *name, char *pass)
         die("%s: file is too big", name);
     }
 
+    size_t blksz = crypt_block_size();
+    size_t hashsz = crypt_hash_len();
+    if (fsize < blksz + hashsz) {
+        die("%s: file is too small", name);
+    }
+
     char *buf = mem_malloc(fsize);
     fread(buf, fsize, 1, f);
     if (ferror(f) > 0) {
         goto exit;
     }
 
-    size_t blksz = crypt_block_size();
-    if (fsize < blksz) { // TODO: + CHECKSUM_SIZE) {
-        die("%s: file is too small", name);
+    char *iv = buf;
+    char *edata = buf + blksz;
+    size_t edatasz = fsize - blksz;
+    char *data = crypt_decrypt(edata, edatasz, iv, blksz, pass);
+    char *hash = data;
+    char *body = data + hashsz;
+    size_t bodysz = edatasz - hashsz;
+
+    char *body_hash = crypt_hash(body, bodysz);
+    if (memcmp(body_hash, hash, hashsz) != 0) {
+        die("%s: file integrity check failed", name);
     }
 
-    char *iv = buf;
-    char *body = buf + blksz;
-    size_t bodysz = fsize - blksz;
-    char *decbody = crypt_decrypt(body, bodysz, iv, blksz, pass);
-    recs = deserialize(decbody, bodysz);
+    recs = deserialize(body, bodysz);
     mem_free(buf);
-    mem_free(decbody);
+    mem_free(data);
+    mem_free(body_hash);
 
 exit:
     fclose(f);
@@ -169,13 +178,23 @@ int file_write(char *name, char *pass, struct record **records)
         goto quit;
     }
 
-    char *buf = NULL;
-    size_t sz = 0;
-    serialize(&buf, &sz, records);
-    char *encbuf = crypt_encrypt(buf, sz, iv, blksz, pass);
-    n = fwrite(encbuf, sz, 1, f);
-    mem_free(buf);
-    mem_free(encbuf);
+    char *s = NULL;
+    size_t ssz = 0;
+    serialize(&s, &ssz, records);
+    char *h = crypt_hash(s, ssz);
+    size_t hsz = crypt_hash_len();
+
+    size_t datasz = ssz + hsz;
+    char *data = mem_malloc(datasz);
+    memcpy(data, h, hsz);
+    memcpy(data + hsz, s, ssz);
+    mem_free(s);
+    mem_free(h);
+
+    char *edata = crypt_encrypt(data, datasz, iv, blksz, pass);
+    n = fwrite(edata, datasz, 1, f);
+    mem_free(data);
+    mem_free(edata);
     if (n != 1) {
         goto quit;
     }

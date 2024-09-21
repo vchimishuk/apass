@@ -4,12 +4,17 @@
 #include "mem.h"
 #include "rand.h"
 
+size_t crypt_hash_len(void)
+{
+    return gcry_md_get_algo_dlen(GCRY_MD_SHA256);
+}
+
 char *crypt_hash(char *buf, size_t len)
 {
-    char *digest = mem_malloc(gcry_md_get_algo_dlen(GCRY_MD_SHA256));
-    gcry_md_hash_buffer(GCRY_MD_SHA256, digest, buf, len);
+    char *h = mem_malloc(crypt_hash_len());
+    gcry_md_hash_buffer(GCRY_MD_SHA256, h, buf, len);
 
-    return digest;
+    return h;
 }
 
 size_t crypt_block_size(void)

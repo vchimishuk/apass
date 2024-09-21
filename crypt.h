@@ -4,6 +4,7 @@
 #define CRYPT_CIPHER GCRY_CIPHER_BLOWFISH
 #define CRYPT_FLAGS GCRY_CIPHER_CBC_CTS
 
+size_t crypt_hash_len(void);
 char *crypt_hash(char *buf, size_t size);
 size_t crypt_block_size(void);
 char *crypt_encrypt(char *buf, size_t bufsz, char *iv, size_t ivsz, char *pass);
