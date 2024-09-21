@@ -163,21 +163,8 @@ exit:
     return recs;
 }
 
-// TODO: Write to temp file.
 int file_write(char *name, char *pass, struct record **records)
 {
-    FILE *f = fopen(name, "w");
-    if (f == NULL) {
-        return -1;
-    }
-
-    size_t blksz = crypt_block_size();
-    char *iv = rand_block(blksz);
-    size_t n = fwrite(iv, blksz, 1, f);
-    if (n != 1) {
-        goto quit;
-    }
-
     char *s = NULL;
     size_t ssz = 0;
     serialize(&s, &ssz, records);
@@ -191,19 +178,37 @@ int file_write(char *name, char *pass, struct record **records)
     mem_free(s);
     mem_free(h);
 
+    size_t blksz = crypt_block_size();
+    char *iv = rand_block(blksz);
     char *edata = crypt_encrypt(data, datasz, iv, blksz, pass);
-    n = fwrite(edata, datasz, 1, f);
-    mem_free(data);
-    mem_free(edata);
-    if (n != 1) {
+
+    int n = 0;
+    char *tmpname = mem_strcat(name, ".new");
+    FILE *f = fopen(tmpname, "w");
+    if (f == NULL) {
         goto quit;
     }
+    n = fwrite(iv, blksz, 1, f);
+    if (n != 1) {
+        n = -1;
+        goto quit;
+    }
+    n = fwrite(edata, datasz, 1, f);
+    if (n != 1) {
+        n = -1;
+        goto quit;
+    }
+    fclose(f);
+
+    n = rename(tmpname, name);
 
 quit:
     mem_free(iv);
-    fclose(f);
+    mem_free(data);
+    mem_free(edata);
+    mem_free(tmpname);
 
-    return n == 1 ? 0 : -1;
+    return n;
 }
 
 void free_records(struct record **rs)

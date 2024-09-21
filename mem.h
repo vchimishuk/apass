@@ -11,5 +11,6 @@ void mem_append(char **buf, size_t *size, char *s);
 int mem_nfind(char *buf, size_t size, char c);
 char *mem_strdup(char *s);
 char *mem_strndup(char *s, size_t n);
+char *mem_strcat(char *a, char *b);
 
 #endif /* MEM_H_ */

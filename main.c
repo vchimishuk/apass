@@ -102,11 +102,8 @@ static char *xdg_data_dir(void)
 
     if (dir == NULL) {
         char *h = home_dir();
-        dir = mem_malloc(strlen(h) + 1 + strlen(".local/share") + 1);
-        strcpy(dir, h);
-        strcat(dir, "/");
-        strcat(dir, ".local/share");
-        mem_free(h);
+        dir = mem_strcat(h, "/");
+        dir = mem_strcat(dir, ".local/share");
     }
 
     if (access(dir, F_OK) != 0) {
@@ -125,19 +122,11 @@ static char *db_file(void)
         dir = home_dir();
         xdg = false;
     }
-
-    size_t n = strlen(dir) + 1 + strlen(PROG) + 1;
+    char *prdir = mem_strcat(dir, "/");
     if (!xdg) {
-        n++;
+        prdir = mem_strcat(prdir, ".");
     }
-    char *prdir = mem_malloc(n);
-    strcpy(prdir, dir);
-    strcat(prdir, "/");
-    if (!xdg) {
-        strcat(prdir, ".");
-    }
-    strcat(prdir, PROG);
-    mem_free(dir);
+    prdir = mem_strcat(prdir, PROG);
 
     if (access(prdir, F_OK) != 0) {
         if (mkdir(prdir, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
@@ -146,14 +135,11 @@ static char *db_file(void)
         }
     }
 
-    char *f = mem_malloc(strlen(prdir) + 1 + strlen(PROG) + strlen(".db") + 1);
-    strcpy(f, prdir);
-    strcat(f, "/");
-    strcat(f, PROG);
-    strcat(f, ".db");
-    mem_free(prdir);
+    prdir = mem_strcat(prdir, "/");
+    prdir = mem_strcat(prdir, PROG);
+    prdir = mem_strcat(prdir, ".db");
 
-    return f;
+    return prdir;
 }
 
 static int cmd_get(int argc, char **argv)

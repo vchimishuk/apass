@@ -68,3 +68,16 @@ char *mem_strndup(char *s, size_t n)
 
     return p;
 }
+
+char *mem_strcat(char *a, char *b)
+{
+    if (a == NULL) {
+        return mem_strdup(b);
+    }
+    size_t asz = strlen(a);
+    size_t bsz = strlen(b);
+    char *c = mem_realloc(a, asz + bsz + 1);
+    strcat(c, b);
+
+    return c;
+}
