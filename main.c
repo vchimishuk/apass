@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <errno.h>
 #include <pwd.h>
 #include <stdarg.h>
@@ -143,6 +144,29 @@ static char *db_file(void)
     return prdir;
 }
 
+static int valid_name(char *s)
+{
+    for (char *p = s; *p != '\0'; p++) {
+        if (!isprint(*p) || isspace(*p)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static char *sanitize_value(char *s)
+{
+    char *p = mem_strdup(s);
+    for (char *q = p; *q != '\0'; q++) {
+        if (*q == '\n') {
+            *q = ' ';
+        }
+    }
+
+    return p;
+}
+
 static int cmd_get(int argc, char **argv)
 {
     bool all = false;
@@ -248,12 +272,18 @@ static int cmd_set(int argc, char **argv)
             if (p == NULL) {
                 return error("%s: invalid attribute format", optarg);
             }
+            char *aname = mem_strndup(optarg, p - optarg);
+            if (!valid_name(aname)) {
+                int err = error("%s: invalid attribute", aname);
+                free(aname);
+                return err;
+            }
             nattrs++;
             attrs = mem_realloc(attrs, sizeof(char *) * (nattrs + 1));
-            attrs[nattrs - 1] = mem_strndup(optarg, p - optarg);
+            attrs[nattrs - 1] = aname;
             attrs[nattrs] = NULL;
             attrvs = mem_realloc(attrvs, sizeof(char *) * (nattrs + 1));
-            attrvs[nattrs - 1] = mem_strdup(p + 1);
+            attrvs[nattrs - 1] = sanitize_value(p + 1);
             attrvs[nattrs] = NULL;
             break;
         case 'g':
@@ -262,7 +292,7 @@ static int cmd_set(int argc, char **argv)
         case 'l':
             len = strtol(optarg, NULL, 10);
             if (errno != 0 || len < 1 || len > 256) {
-                return error("invalid length: %s", optarg);
+                return error("%s: invalid length", optarg);
             }
             break;
         case 'p':
@@ -284,10 +314,17 @@ static int cmd_set(int argc, char **argv)
     if (optind != argc - 1) {
         return usage_set();
     }
-    char *name = argv[optind];
 
     char *fname = db_file();
-    struct record **recs = file_read(fname, PASS);
+    struct record **recs = NULL;
+
+    char *name = argv[optind];
+    if (!valid_name(name)) {
+        ret = error("%s: invalid name", name);
+        goto quit;
+    }
+
+    recs = file_read(fname, PASS);
     if (recs == NULL) {
         ret = error(strerror(errno));
         goto quit;

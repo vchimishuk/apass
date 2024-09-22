@@ -213,6 +213,9 @@ quit:
 
 void free_records(struct record **rs)
 {
+    if (rs == NULL) {
+        return;
+    }
     for (struct record **r = rs; *r != NULL; r++) {
         mem_free((*r)->name);
         mem_free((*r)->pass);
