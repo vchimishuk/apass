@@ -220,7 +220,7 @@ static int cmd_get(int argc, char **argv)
         }
     }
     if (rec == NULL) {
-        free_records(recs);
+        file_free_records(recs);
         return error("%s: no such record", name);
     }
 
@@ -236,7 +236,7 @@ static int cmd_get(int argc, char **argv)
         }
     }
 
-    free_records(recs);
+    file_free_records(recs);
 
     return 0;
 }
@@ -258,7 +258,7 @@ static int cmd_list(int argc, __attribute__((unused)) char **argv)
         printf("%s\n", (*r)->name);
     }
 
-    free_records(recs);
+    file_free_records(recs);
 
     return 0;
 }
@@ -292,7 +292,7 @@ static int cmd_remove(int argc, char **argv)
         ret = error("%s: no such record");
         goto quit;
     }
-    free_record(recs[k]);
+    file_free_record(recs[k]);
     recs[k] = NULL;
     if (k < i - 1) {
         recs[k] = recs[i - 1];
@@ -306,7 +306,7 @@ static int cmd_remove(int argc, char **argv)
 
 quit:
     mem_free(fname);
-    free_records(recs);
+    file_free_records(recs);
 
     return ret;
 }
@@ -349,7 +349,7 @@ static int cmd_rename(int argc, char **argv)
 
 quit:
     mem_free(fname);
-    free_records(recs);
+    file_free_records(recs);
 
     return ret;
 }
@@ -522,7 +522,7 @@ static int cmd_set(int argc, char **argv)
 
 quit:
     mem_free(fname);
-    free_records(recs);
+    file_free_records(recs);
     mem_free(attrs);
     mem_free(attrvs);
 

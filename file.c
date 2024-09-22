@@ -211,7 +211,7 @@ quit:
     return n;
 }
 
-void free_record(struct record *r)
+void file_free_record(struct record *r)
 {
     mem_free(r->name);
     mem_free(r->pass);
@@ -224,13 +224,13 @@ void free_record(struct record *r)
     mem_free(r);
 }
 
-void free_records(struct record **rs)
+void file_free_records(struct record **rs)
 {
     if (rs == NULL) {
         return;
     }
     for (struct record **r = rs; *r != NULL; r++) {
-        free_record(*r);
+        file_free_record(*r);
     }
     mem_free(rs);
 }
