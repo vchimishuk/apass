@@ -12,6 +12,8 @@
 #include "mem.h"
 #include "rand.h"
 
+#define DEFAULT_PASS_LEN 24
+
 static char *PROG = "apass";
 // TODO:
 static char *PASS = "password";
@@ -70,8 +72,7 @@ static int usage_list(void)
 
 static int usage_set(void)
 {
-    // TODO: Support generation password length limit and other customisation.
-    fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-s] "
+    fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-S] "
         "name\n", PROG);
 
     return EXIT_FAILURE;
@@ -229,6 +230,8 @@ static int cmd_set(int argc, char **argv)
     int ret = 0;
     bool generate = false;
     bool setpass = false;
+    bool sym = true;
+    long len = DEFAULT_PASS_LEN;
 
     int nattrs = 0;
     char **attrs = mem_malloc(sizeof(char *));
@@ -237,7 +240,7 @@ static int cmd_set(int argc, char **argv)
     attrvs[0] = NULL;
 
     int ch;
-    while ((ch = getopt(argc, argv, "a:glps")) != -1) {
+    while ((ch = getopt(argc, argv, "a:gl:pS")) != -1) {
         char *p;
         switch (ch) {
         case 'a':
@@ -257,13 +260,16 @@ static int cmd_set(int argc, char **argv)
             generate = true;
             break;
         case 'l':
-            // TODO:
+            len = strtol(optarg, NULL, 10);
+            if (errno != 0 || len < 1 || len > 256) {
+                return error("invalid length: %s", optarg);
+            }
             break;
         case 'p':
             setpass = true;
             break;
-        case 's':
-            // TODO:
+        case 'S':
+            sym = false;
             break;
         default:
             return usage_set();
@@ -322,7 +328,7 @@ static int cmd_set(int argc, char **argv)
 
         char *pass;
         if (generate) {
-            pass = rand_password(8);
+            pass = rand_password(len, sym);
         } else {
             pass = password();
             if (pass == NULL) {
