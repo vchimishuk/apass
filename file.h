@@ -14,6 +14,7 @@ struct record {
 
 struct record **file_read(char *name, char *pass);
 int file_write(char *name, char *pass, struct record **records);
+void free_record(struct record *r);
 void free_records(struct record **rs);
 
 #endif /* FILE_H_ */

@@ -211,21 +211,26 @@ quit:
     return n;
 }
 
+void free_record(struct record *r)
+{
+    mem_free(r->name);
+    mem_free(r->pass);
+    for (struct attr **a = r->attrs; *a != NULL; a++) {
+        mem_free((*a)->name);
+        mem_free((*a)->val);
+        mem_free(*a);
+    }
+    mem_free(r->attrs);
+    mem_free(r);
+}
+
 void free_records(struct record **rs)
 {
     if (rs == NULL) {
         return;
     }
     for (struct record **r = rs; *r != NULL; r++) {
-        mem_free((*r)->name);
-        mem_free((*r)->pass);
-        for (struct attr **a = (*r)->attrs; *a != NULL; a++) {
-            mem_free((*a)->name);
-            mem_free((*a)->val);
-            mem_free(*a);
-        }
-        mem_free((*r)->attrs);
-        mem_free(*r);
+        free_record(*r);
     }
     mem_free(rs);
 }

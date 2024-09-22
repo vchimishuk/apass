@@ -71,6 +71,13 @@ static int usage_list(void)
     return EXIT_FAILURE;
 }
 
+static int usage_remove(void)
+{
+    fprintf(stderr, "usage: %s remove name\n", PROG);
+
+    return EXIT_FAILURE;
+}
+
 static int usage_set(void)
 {
     fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-S] "
@@ -247,6 +254,54 @@ static int cmd_list(int argc, __attribute__((unused)) char **argv)
     free_records(recs);
 
     return 0;
+}
+
+static int cmd_remove(int argc, char **argv)
+{
+    if (argc != 2) {
+        return usage_remove();
+    }
+
+    int ret = 0;
+    char *name = argv[1];
+    char *fname = NULL;
+    struct record **recs = NULL;
+
+    fname = db_file();
+    recs = file_read(fname, PASS);
+    if (recs == NULL) {
+        ret = error(strerror(errno));
+        goto quit;
+    }
+
+    int k = -1;
+    int i = 0;
+    for (; recs[i] != NULL; i++) {
+        if (strcmp(recs[i]->name, name) == 0) {
+            k = i;
+        }
+    }
+    if (k == -1) {
+        ret = error("%s: no such record");
+        goto quit;
+    }
+    free_record(recs[k]);
+    recs[k] = NULL;
+    if (k < i - 1) {
+        recs[k] = recs[i - 1];
+        recs[i - 1] = NULL;
+    }
+
+    if (file_write(fname, PASS, recs) != 0) {
+        ret = error(strerror(errno));
+        goto quit;
+    }
+
+quit:
+    mem_free(fname);
+    free_records(recs);
+
+    return ret;
 }
 
 static int cmd_set(int argc, char **argv)
@@ -433,7 +488,7 @@ struct command commands[] = {
     {"get", cmd_get},
     {"list", cmd_list},
     // TODO: {"rename", cmd_rename},
-    // TODO: {"remove", cmd_remove},
+    {"remove", cmd_remove},
     {"set", cmd_set},
     {NULL, NULL},
 };
