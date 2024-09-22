@@ -78,6 +78,13 @@ static int usage_remove(void)
     return EXIT_FAILURE;
 }
 
+static int usage_rename(void)
+{
+    fprintf(stderr, "usage: %s rename oldname newname\n", PROG);
+
+    return EXIT_FAILURE;
+}
+
 static int usage_set(void)
 {
     fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-S] "
@@ -304,6 +311,49 @@ quit:
     return ret;
 }
 
+static int cmd_rename(int argc, char **argv)
+{
+    if (argc != 3) {
+        return usage_rename();
+    }
+
+    char *oldname = argv[1];
+    char *newname = argv[2];
+
+    int ret = 0;
+    char *fname = db_file();
+    struct record **recs = file_read(fname, PASS);
+    if (recs == NULL) {
+        ret = error(strerror(errno));
+        goto quit;
+    }
+
+    struct record *rec = NULL;
+    for (struct record **r = recs; *r != NULL; r++) {
+        if (strcmp((*r)->name, oldname) == 0) {
+            rec = *r;
+            break;
+        }
+    }
+    if (rec == NULL) {
+        ret = error("%s: no such record");
+        goto quit;
+    }
+    mem_free(rec->name);
+    rec->name = mem_strdup(newname);
+
+    if (file_write(fname, PASS, recs) != 0) {
+        ret = error(strerror(errno));
+        goto quit;
+    }
+
+quit:
+    mem_free(fname);
+    free_records(recs);
+
+    return ret;
+}
+
 static int cmd_set(int argc, char **argv)
 {
     int ret = 0;
@@ -487,8 +537,8 @@ struct command {
 struct command commands[] = {
     {"get", cmd_get},
     {"list", cmd_list},
-    // TODO: {"rename", cmd_rename},
     {"remove", cmd_remove},
+    {"rename", cmd_rename},
     {"set", cmd_set},
     {NULL, NULL},
 };
