@@ -537,6 +537,7 @@ struct command {
 struct command commands[] = {
     {"get", cmd_get},
     {"list", cmd_list},
+    // {"pass", cmd_pass},
     {"remove", cmd_remove},
     {"rename", cmd_rename},
     {"set", cmd_set},
@@ -574,6 +575,8 @@ int main(int argc, char **argv)
         cargc = argc;
         cargv = argv;
     }
+
+    umask(S_IWGRP | S_IRGRP | S_IWOTH | S_IROTH);
 
     return cmd->exec(cargc, cargv);
 }
