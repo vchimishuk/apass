@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <pwd.h>
+#include <readpassphrase.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -15,9 +16,8 @@
 
 #define DEFAULT_PASS_LEN 24
 
-static char *PROG = "apass";
-// TODO:
-static char *PASS = "password";
+static char *prog = "apass";
+static char dbpass[256];
 
 static bool yesno(char *msg)
 {
@@ -35,14 +35,23 @@ static bool yesno(char *msg)
 
 static char *password(void)
 {
-    char *a = mem_strdup(getpass("Password: "));
-    char *b = getpass("Repeat password: ");
-    if (strcmp(a, b) != 0) {
-        mem_free(a);
+    char buf[256];
+    char buf2[256];
+
+    if (readpassphrase("Password: ", buf, sizeof(buf),
+            RPP_REQUIRE_TTY) == NULL) {
+        die("reading password failed");
+    }
+    if (readpassphrase("Repeat password: ", buf2, sizeof(buf2),
+            RPP_REQUIRE_TTY) == NULL) {
+        die("reading password failed");
+    }
+
+    if (strcmp(buf, buf2) != 0) {
         return NULL;
     }
 
-    return a;
+    return mem_strdup(buf);
 }
 
 static int error(char *fmt, ...)
@@ -59,28 +68,28 @@ static int error(char *fmt, ...)
 
 static int usage_get(void)
 {
-    fprintf(stderr, "usage: %s get [-A] [-a attribute] name\n", PROG);
+    fprintf(stderr, "usage: %s get [-A] [-a attribute] name\n", prog);
 
     return EXIT_FAILURE;
 }
 
 static int usage_list(void)
 {
-    fprintf(stderr, "usage: %s list\n", PROG);
+    fprintf(stderr, "usage: %s list\n", prog);
 
     return EXIT_FAILURE;
 }
 
 static int usage_remove(void)
 {
-    fprintf(stderr, "usage: %s remove name\n", PROG);
+    fprintf(stderr, "usage: %s remove name\n", prog);
 
     return EXIT_FAILURE;
 }
 
 static int usage_rename(void)
 {
-    fprintf(stderr, "usage: %s rename oldname newname\n", PROG);
+    fprintf(stderr, "usage: %s rename oldname newname\n", prog);
 
     return EXIT_FAILURE;
 }
@@ -88,7 +97,7 @@ static int usage_rename(void)
 static int usage_set(void)
 {
     fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-S] "
-        "name\n", PROG);
+        "name\n", prog);
 
     return EXIT_FAILURE;
 }
@@ -142,7 +151,7 @@ static char *db_file(void)
     if (!xdg) {
         prdir = mem_strcat(prdir, ".");
     }
-    prdir = mem_strcat(prdir, PROG);
+    prdir = mem_strcat(prdir, prog);
 
     if (access(prdir, F_OK) != 0) {
         if (mkdir(prdir, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
@@ -152,7 +161,7 @@ static char *db_file(void)
     }
 
     prdir = mem_strcat(prdir, "/");
-    prdir = mem_strcat(prdir, PROG);
+    prdir = mem_strcat(prdir, prog);
     prdir = mem_strcat(prdir, ".db");
 
     return prdir;
@@ -206,7 +215,7 @@ static int cmd_get(int argc, char **argv)
     char *name = argv[optind];
 
     char *fname = db_file();
-    struct record **recs = file_read(fname, PASS);
+    struct record **recs = file_read(fname, dbpass);
     mem_free(fname);
     if (recs == NULL) {
         return error(strerror(errno));
@@ -248,7 +257,7 @@ static int cmd_list(int argc, __attribute__((unused)) char **argv)
     }
 
     char *fname = db_file();
-    struct record **recs = file_read(fname, PASS);
+    struct record **recs = file_read(fname, dbpass);
     mem_free(fname);
     if (recs == NULL) {
         return error(strerror(errno));
@@ -275,7 +284,7 @@ static int cmd_remove(int argc, char **argv)
     struct record **recs = NULL;
 
     fname = db_file();
-    recs = file_read(fname, PASS);
+    recs = file_read(fname, dbpass);
     if (recs == NULL) {
         ret = error(strerror(errno));
         goto quit;
@@ -299,7 +308,7 @@ static int cmd_remove(int argc, char **argv)
         recs[i - 1] = NULL;
     }
 
-    if (file_write(fname, PASS, recs) != 0) {
+    if (file_write(fname, dbpass, recs) != 0) {
         ret = error(strerror(errno));
         goto quit;
     }
@@ -322,7 +331,7 @@ static int cmd_rename(int argc, char **argv)
 
     int ret = 0;
     char *fname = db_file();
-    struct record **recs = file_read(fname, PASS);
+    struct record **recs = file_read(fname, dbpass);
     if (recs == NULL) {
         ret = error(strerror(errno));
         goto quit;
@@ -342,7 +351,7 @@ static int cmd_rename(int argc, char **argv)
     mem_free(rec->name);
     rec->name = mem_strdup(newname);
 
-    if (file_write(fname, PASS, recs) != 0) {
+    if (file_write(fname, dbpass, recs) != 0) {
         ret = error(strerror(errno));
         goto quit;
     }
@@ -429,7 +438,7 @@ static int cmd_set(int argc, char **argv)
         goto quit;
     }
 
-    recs = file_read(fname, PASS);
+    recs = file_read(fname, dbpass);
     if (recs == NULL) {
         ret = error(strerror(errno));
         goto quit;
@@ -515,7 +524,7 @@ static int cmd_set(int argc, char **argv)
         }
     }
 
-    if (file_write(fname, PASS, recs) != 0) {
+    if (file_write(fname, dbpass, recs) != 0) {
         ret = error(strerror(errno));
         goto quit;
     }
@@ -577,6 +586,14 @@ int main(int argc, char **argv)
     }
 
     umask(S_IWGRP | S_IRGRP | S_IWOTH | S_IROTH);
+
+    if (readpassphrase("Password: ", dbpass, sizeof(dbpass),
+            RPP_REQUIRE_TTY) == NULL) {
+        return error("reading password failed");
+    }
+    if (strlen(dbpass) < 3) {
+        return error("password too short");
+    }
 
     return cmd->exec(cargc, cargv);
 }
