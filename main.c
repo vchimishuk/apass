@@ -15,9 +15,10 @@
 #include "rand.h"
 
 #define DEFAULT_PASS_LEN 24
+#define PASS_BUF_LEN 256
 
 static char *prog = "apass";
-static char dbpass[256];
+static char dbpass[PASS_BUF_LEN];
 
 static bool yesno(char *msg)
 {
@@ -35,8 +36,8 @@ static bool yesno(char *msg)
 
 static char *password(char *prompt, char *repeat_prompt)
 {
-    char buf[256];
-    char buf2[256];
+    char buf[PASS_BUF_LEN];
+    char buf2[PASS_BUF_LEN];
 
     if (readpassphrase(prompt, buf, sizeof(buf),
             RPP_REQUIRE_TTY) == NULL) {
@@ -62,6 +63,11 @@ static void print_usage_get(void)
 static void print_usage_list(void)
 {
     fprintf(stderr, "usage: %s list\n", prog);
+}
+
+static void print_usage_pass(void)
+{
+    fprintf(stderr, "usage: %s pass\n", prog);
 }
 
 static void print_usage_remove(void)
@@ -261,6 +267,44 @@ static struct error *cmd_list(int argc, __attribute__((unused)) char **argv)
     return NULL;
 }
 
+static struct error *cmd_pass(int argc, __attribute__((unused)) char **argv)
+{
+    if (argc != 1) {
+        print_usage_pass();
+        return error_create_silent();
+    }
+
+    struct error *err = NULL;
+    char *fname = db_file();
+    char *pass = NULL;
+    struct array *recs = NULL;
+
+    err = file_read(fname, dbpass, &recs);
+    if (err) {
+        goto quit;
+    }
+
+    pass = password("New password: ", "Repeat new password: ");
+    if (pass == NULL) {
+        err = error_create("Passwords missmatch! Aborting.");
+        goto quit;
+    }
+
+    strlcpy(dbpass, pass, PASS_BUF_LEN);
+
+    err = file_write(fname, dbpass, recs);
+    if (err) {
+        goto quit;
+    }
+
+quit:
+    mem_free(fname);
+    mem_free(pass);
+    file_free_records(recs);
+
+    return err;
+}
+
 static struct error *cmd_remove(int argc, char **argv)
 {
     if (argc != 2) {
@@ -457,9 +501,10 @@ static struct error *cmd_set(int argc, char **argv)
         if (generate) {
             pass = rand_password(len, sym);
         } else {
+            int n;
             char *prompt;
             char *repeat_prompt;
-            int n = asprintf(&prompt, "New password for `%s`: ", name);
+            n = asprintf(&prompt, "New password for `%s`: ", name);
             if (n < 0) {
                 die("asprintf");
             }
@@ -469,6 +514,8 @@ static struct error *cmd_set(int argc, char **argv)
             }
 
             pass = password(prompt, repeat_prompt);
+            mem_free(prompt);
+            mem_free(repeat_prompt);
             if (pass == NULL) {
                 err = error_create("Passwords missmatch! Aborting.");
                 goto quit;
@@ -532,7 +579,7 @@ struct command {
 struct command commands[] = {
     {"get", cmd_get},
     {"list", cmd_list},
-    // {"pass", cmd_pass},
+    {"pass", cmd_pass},
     {"remove", cmd_remove},
     {"rename", cmd_rename},
     {"set", cmd_set},
