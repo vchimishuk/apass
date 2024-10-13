@@ -125,6 +125,11 @@ static char *xdg_data_dir(void)
 
 static char *db_file(void)
 {
+    char *db = getenv("APASS_DB");
+    if (db) {
+        return mem_strdup(db);
+    }
+
     char *dir = xdg_data_dir();
     bool xdg = true;
     if (dir == NULL) {
