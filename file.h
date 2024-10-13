@@ -1,6 +1,9 @@
 #ifndef FILE_H_
 #define FILE_H_
 
+#include "array.h"
+#include "error.h"
+
 struct attr {
     char *name;
     char *val;
@@ -9,12 +12,12 @@ struct attr {
 struct record {
     char *name;
     char *pass;
-    struct attr **attrs;
+    struct array *attrs;
 };
 
-struct record **file_read(char *name, char *pass);
-int file_write(char *name, char *pass, struct record **records);
+struct error *file_read(char *name, char *pass, struct array **recs);
+struct error *file_write(char *name, char *pass, struct array *recs);
 void file_free_record(struct record *r);
-void file_free_records(struct record **rs);
+void file_free_records(struct array *recs);
 
 #endif /* FILE_H_ */

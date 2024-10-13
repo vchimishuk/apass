@@ -5,7 +5,9 @@ project(apass)
 add_compile_options(-std=c99 -Wall -Wextra -Wpedantic)
 
 add_executable(apass
+               array.c
                crypt.c
+               error.c
                exit.c
                file.c
                main.c

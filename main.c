@@ -33,16 +33,16 @@ static bool yesno(char *msg)
     return yes;
 }
 
-static char *password(void)
+static char *password(char *prompt, char *repeat_prompt)
 {
     char buf[256];
     char buf2[256];
 
-    if (readpassphrase("Password: ", buf, sizeof(buf),
+    if (readpassphrase(prompt, buf, sizeof(buf),
             RPP_REQUIRE_TTY) == NULL) {
         die("reading password failed");
     }
-    if (readpassphrase("Repeat password: ", buf2, sizeof(buf2),
+    if (readpassphrase(repeat_prompt, buf2, sizeof(buf2),
             RPP_REQUIRE_TTY) == NULL) {
         die("reading password failed");
     }
@@ -54,52 +54,30 @@ static char *password(void)
     return mem_strdup(buf);
 }
 
-static int error(char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    fprintf(stderr, "apass: ");
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    va_end(ap);
-
-    return EXIT_FAILURE;
-}
-
-static int usage_get(void)
+static void print_usage_get(void)
 {
     fprintf(stderr, "usage: %s get [-A] [-a attribute] name\n", prog);
-
-    return EXIT_FAILURE;
 }
 
-static int usage_list(void)
+static void print_usage_list(void)
 {
     fprintf(stderr, "usage: %s list\n", prog);
-
-    return EXIT_FAILURE;
 }
 
-static int usage_remove(void)
+static void print_usage_remove(void)
 {
     fprintf(stderr, "usage: %s remove name\n", prog);
-
-    return EXIT_FAILURE;
 }
 
-static int usage_rename(void)
+static void print_usage_rename(void)
 {
     fprintf(stderr, "usage: %s rename oldname newname\n", prog);
-
-    return EXIT_FAILURE;
 }
 
-static int usage_set(void)
+static void print_usage_set(void)
 {
     fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-S] "
         "name\n", prog);
-
-    return EXIT_FAILURE;
 }
 
 static char *home_dir(void)
@@ -190,7 +168,7 @@ static char *sanitize_value(char *s)
     return p;
 }
 
-static int cmd_get(int argc, char **argv)
+static struct error *cmd_get(int argc, char **argv)
 {
     bool all = false;
     char *attr = NULL;
@@ -205,111 +183,118 @@ static int cmd_get(int argc, char **argv)
             attr = optarg;
             break;
         default:
-            return usage_get();
+            print_usage_get();
+            return error_create_silent();
         }
     }
 
     if (optind != argc - 1) {
-        return usage_get();
+        print_usage_get();
+        return error_create_silent();
     }
     char *name = argv[optind];
-
     char *fname = db_file();
-    struct record **recs = file_read(fname, dbpass);
-    mem_free(fname);
-    if (recs == NULL) {
-        return error(strerror(errno));
+    struct array *recs = NULL;
+    struct error *err = NULL;
+
+    err = file_read(fname, dbpass, &recs);
+    if (err) {
+        goto quit;
     }
 
     struct record *rec = NULL;
-    for (struct record **r = recs; *r != NULL; r++) {
-        if (strcmp((*r)->name, name) == 0) {
-            rec = *r;
+    for (size_t i = 0; i < recs->size; i++) {
+        struct record *r = array_get(recs, i);
+        if (strcmp(r->name, name) == 0) {
+            rec = r;
             break;
         }
     }
     if (rec == NULL) {
-        file_free_records(recs);
-        return error("%s: no such record", name);
+        err = error_create("%s: no such record", name);
+        goto quit;
     }
 
     if (all || attr == NULL) {
         printf("%s\n", rec->pass);
     }
-    for (struct attr **a = rec->attrs; *a != NULL; a++) {
+    for (size_t i = 0; i < rec->attrs->size; i++) {
+        struct attr *a = array_get(rec->attrs, i);
         if (all) {
-            printf("%s=", (*a)->name);
+            printf("%s=", a->name);
         }
-        if (all || (attr && strcmp((*a)->name, attr) == 0)) {
-            printf("%s\n", (*a)->val);
+        if (all || (attr && strcmp(a->name, attr) == 0)) {
+            printf("%s\n", a->val);
         }
     }
 
+quit:
+    mem_free(fname);
     file_free_records(recs);
 
-    return 0;
+    return err;
 }
 
-static int cmd_list(int argc, __attribute__((unused)) char **argv)
+static struct error *cmd_list(int argc, __attribute__((unused)) char **argv)
 {
     if (argc != 1) {
-        return usage_list();
+        print_usage_list();
+        return error_create_silent();
     }
 
     char *fname = db_file();
-    struct record **recs = file_read(fname, dbpass);
+    struct array *recs = NULL;
+
+    struct error *err = file_read(fname, dbpass, &recs);
     mem_free(fname);
-    if (recs == NULL) {
-        return error(strerror(errno));
+    if (err) {
+        return err;
     }
 
-    for (struct record **r = recs; *r != NULL; r++) {
-        printf("%s\n", (*r)->name);
+    for (size_t i = 0; i < recs->size; i++) {
+        struct record *r = array_get(recs, i);
+        printf("%s\n", r->name);
     }
 
     file_free_records(recs);
 
-    return 0;
+    return NULL;
 }
 
-static int cmd_remove(int argc, char **argv)
+static struct error *cmd_remove(int argc, char **argv)
 {
     if (argc != 2) {
-        return usage_remove();
+        print_usage_remove();
+        return error_create_silent();
     }
 
-    int ret = 0;
+    struct error *err = NULL;
     char *name = argv[1];
     char *fname = NULL;
-    struct record **recs = NULL;
+    struct array *recs = NULL;
 
     fname = db_file();
-    recs = file_read(fname, dbpass);
-    if (recs == NULL) {
-        ret = error(strerror(errno));
+    err = file_read(fname, dbpass, &recs);
+    if (err) {
         goto quit;
     }
 
-    int k = -1;
-    int i = 0;
-    for (; recs[i] != NULL; i++) {
-        if (strcmp(recs[i]->name, name) == 0) {
-            k = i;
+    int idx = -1;
+    for (size_t i = 0; i < recs->size; i++) {
+        struct record *r = array_get(recs, i);
+        if (strcmp(r->name, name) == 0) {
+            idx = i;
         }
     }
-    if (k == -1) {
-        ret = error("%s: no such record");
+    if (idx == -1) {
+        err = error_create("%s: no such record", name);
         goto quit;
     }
-    file_free_record(recs[k]);
-    recs[k] = NULL;
-    if (k < i - 1) {
-        recs[k] = recs[i - 1];
-        recs[i - 1] = NULL;
-    }
+    file_free_record(array_get(recs, idx));
+    array_remove(recs, idx);
 
-    if (file_write(fname, dbpass, recs) != 0) {
-        ret = error(strerror(errno));
+    err = file_write(fname, dbpass, recs);
+    if (err) {
         goto quit;
     }
 
@@ -317,42 +302,45 @@ quit:
     mem_free(fname);
     file_free_records(recs);
 
-    return ret;
+    return err;
 }
 
-static int cmd_rename(int argc, char **argv)
+static struct error *cmd_rename(int argc, char **argv)
 {
     if (argc != 3) {
-        return usage_rename();
+        print_usage_rename();
+        return error_create_silent();
     }
 
     char *oldname = argv[1];
     char *newname = argv[2];
 
-    int ret = 0;
+    struct error *err = NULL;
+    struct array *recs = NULL;
     char *fname = db_file();
-    struct record **recs = file_read(fname, dbpass);
-    if (recs == NULL) {
-        ret = error(strerror(errno));
+
+    err = file_read(fname, dbpass, &recs);
+    if (err) {
         goto quit;
     }
 
     struct record *rec = NULL;
-    for (struct record **r = recs; *r != NULL; r++) {
-        if (strcmp((*r)->name, oldname) == 0) {
-            rec = *r;
+    for (size_t i = 0; i < recs->size; i++) {
+        struct record *r = array_get(recs, i);
+        if (strcmp(r->name, oldname) == 0) {
+            rec = r;
             break;
         }
     }
     if (rec == NULL) {
-        ret = error("%s: no such record");
+        err = error_create("%s: no such record", oldname);
         goto quit;
     }
     mem_free(rec->name);
     rec->name = mem_strdup(newname);
 
-    if (file_write(fname, dbpass, recs) != 0) {
-        ret = error(strerror(errno));
+    err = file_write(fname, dbpass, recs);
+    if (err) {
         goto quit;
     }
 
@@ -360,22 +348,19 @@ quit:
     mem_free(fname);
     file_free_records(recs);
 
-    return ret;
+    return err;
 }
 
-static int cmd_set(int argc, char **argv)
+static struct error *cmd_set(int argc, char **argv)
 {
-    int ret = 0;
+    struct error *err = NULL;
     bool generate = false;
     bool setpass = false;
     bool sym = true;
     long len = DEFAULT_PASS_LEN;
 
-    int nattrs = 0;
-    char **attrs = mem_malloc(sizeof(char *));
-    attrs[0] = NULL;
-    char **attrvs = mem_malloc(sizeof(char *));
-    attrvs[0] = NULL;
+    struct array *attr_names = array_create();
+    struct array *attr_vals = array_create();
 
     int ch;
     while ((ch = getopt(argc, argv, "a:gl:pS")) != -1) {
@@ -384,21 +369,16 @@ static int cmd_set(int argc, char **argv)
         case 'a':
             p = strstr(optarg, "=");
             if (p == NULL) {
-                return error("%s: invalid attribute format", optarg);
+                return error_create("%s: invalid attribute format", optarg);
             }
             char *aname = mem_strndup(optarg, p - optarg);
             if (!valid_name(aname)) {
-                int err = error("%s: invalid attribute", aname);
+                err = error_create("%s: invalid attribute", aname);
                 free(aname);
                 return err;
             }
-            nattrs++;
-            attrs = mem_realloc(attrs, sizeof(char *) * (nattrs + 1));
-            attrs[nattrs - 1] = aname;
-            attrs[nattrs] = NULL;
-            attrvs = mem_realloc(attrvs, sizeof(char *) * (nattrs + 1));
-            attrvs[nattrs - 1] = sanitize_value(p + 1);
-            attrvs[nattrs] = NULL;
+            array_append(attr_names, aname);
+            array_append(attr_vals, sanitize_value(p + 1));
             break;
         case 'g':
             generate = true;
@@ -406,7 +386,7 @@ static int cmd_set(int argc, char **argv)
         case 'l':
             len = strtol(optarg, NULL, 10);
             if (errno != 0 || len < 1 || len > 256) {
-                return error("%s: invalid length", optarg);
+                return error_create("%s: invalid length", optarg);
             }
             break;
         case 'p':
@@ -416,54 +396,50 @@ static int cmd_set(int argc, char **argv)
             sym = false;
             break;
         default:
-            return usage_set();
+            print_usage_set();
+            return error_create_silent();
         }
     }
 
+    char *fname = db_file();
+    struct array *recs = NULL;
+
     // Default mode is set password even if -p flag is not specified.
-    if (nattrs == 0) {
+    if (attr_names->size == 0) {
         setpass = true;
     }
 
     if (optind != argc - 1) {
-        return usage_set();
-    }
-
-    char *fname = db_file();
-    struct record **recs = NULL;
-
-    char *name = argv[optind];
-    if (!valid_name(name)) {
-        ret = error("%s: invalid name", name);
+        print_usage_set();
+        err = error_create_silent();
         goto quit;
     }
 
-    recs = file_read(fname, dbpass);
-    if (recs == NULL) {
-        ret = error(strerror(errno));
+    char *name = argv[optind];
+    if (!valid_name(name)) {
+        err = error_create("%s: invalid name", name);
+        goto quit;
+    }
+
+    err = file_read(fname, dbpass, &recs);
+    if (err) {
         goto quit;
     }
 
     struct record *rec = NULL;
-    int nrecs = 0;
-    for (struct record **r = recs; *r != NULL; r++) {
-        if (strcmp((*r)->name, name) == 0) {
-            rec = *r;
+    for (size_t i = 0; i < recs->size; i++) {
+        struct record *r = array_get(recs, i);
+        if (strcmp(r->name, name) == 0) {
+            rec = r;
         }
-        nrecs++;
     }
 
     if (rec == NULL) {
         rec = mem_malloc(sizeof(struct record));
         rec->name = mem_strdup(name);
         rec->pass = NULL;
-        rec->attrs = mem_malloc(sizeof(struct attr *));
-        rec->attrs[0] = NULL;
-
-        nrecs++;
-        recs = mem_realloc(recs, sizeof(struct record *) * (nrecs + 1));
-        recs[nrecs - 1] = rec;
-        recs[nrecs] = NULL;
+        rec->attrs = array_create();
+        array_append(recs, rec);
 
         // Force to set password for the new record.
         setpass = true;
@@ -481,10 +457,20 @@ static int cmd_set(int argc, char **argv)
         if (generate) {
             pass = rand_password(len, sym);
         } else {
-            pass = password();
+            char *prompt;
+            char *repeat_prompt;
+            int n = asprintf(&prompt, "New password for `%s`: ", name);
+            if (n < 0) {
+                die("asprintf");
+            }
+            n = asprintf(&repeat_prompt, "Repeat new password for `%s`: ", name);
+            if (n < 0) {
+                die("asprintf");
+            }
+
+            pass = password(prompt, repeat_prompt);
             if (pass == NULL) {
-                fprintf(stderr, "Passwords missmatch! Aborting.\n");
-                ret = 1;
+                err = error_create("Passwords missmatch! Aborting.");
                 goto quit;
             }
         }
@@ -492,55 +478,55 @@ static int cmd_set(int argc, char **argv)
         rec->pass = pass;
     }
 
-    for (int i = 0; i < nattrs; i++) {
-        struct attr *at = NULL;
-        int nat = 0;
-        for (struct attr **a = rec->attrs; *a != NULL; a++) {
-            if (strcmp((*a)->name, attrs[i]) == 0) {
-                at = *a;
+    for (size_t i = 0; i < attr_names->size; i++) {
+        char *name = array_get(attr_names, i);
+        struct attr *attr = NULL;
+
+        for (size_t j = 0; rec->attrs->size; j++) {
+            struct attr *a = array_get(rec->attrs, j);
+            if (strcmp(a->name, name) == 0) {
+                attr = a;
             }
-            nat++;
         }
 
-        if (at == NULL) {
-            at = mem_malloc(sizeof(struct attr));
-            at->name = attrs[i];
-            at->val = attrvs[i];
-            nat++;
-            rec->attrs = mem_realloc(rec->attrs,
-                sizeof(struct attr *) * (nat + 1));
-            rec->attrs[nat - 1] = at;
-            rec->attrs[nat] = NULL;
+        if (attr == NULL) {
+            attr = mem_malloc(sizeof(struct attr));
+            attr->name = name;
+            attr->val = array_get(attr_vals, i);
+            array_append(rec->attrs, attr);
         } else {
             bool replace = yesno("Attribute already exists. Overwrite it?");
             if (!replace) {
                 goto quit;
             }
 
-            mem_free(at->name);
-            at->name = attrs[i];
-            mem_free(at->val);
-            at->val = attrvs[i];
+            mem_free(attr->val);
+            attr->val = mem_strdup(array_get(attr_vals, i));
         }
     }
 
-    if (file_write(fname, dbpass, recs) != 0) {
-        ret = error(strerror(errno));
+    err = file_write(fname, dbpass, recs);
+    if (err) {
         goto quit;
     }
 
 quit:
     mem_free(fname);
     file_free_records(recs);
-    mem_free(attrs);
-    mem_free(attrvs);
 
-    return ret;
+    for (size_t i = 0; i < attr_names->size; i++) {
+        mem_free(array_get(attr_names, i));
+        mem_free(array_get(attr_vals, i));
+    }
+    array_destroy(attr_names);
+    array_destroy(attr_vals);
+
+    return err;
 }
 
 struct command {
     char *name;
-    int (*exec)(int, char **);
+    struct error *(*exec)(int, char **);
 };
 
 struct command commands[] = {
@@ -568,8 +554,10 @@ int main(int argc, char **argv)
 {
     if (argc == 1) {
         die("TODO: usage()");
+        // TODO: goto quit;
     }
 
+    struct error *err = NULL;
     struct command *cmd = find_command(argv[1]);
     int cargc;
     char **cargv;
@@ -580,6 +568,7 @@ int main(int argc, char **argv)
         cmd = find_command("get");
         if (cmd == NULL) {
             die("TODO: usage()");
+            // TODO: goto quit;
         }
         cargc = argc;
         cargv = argv;
@@ -589,11 +578,25 @@ int main(int argc, char **argv)
 
     if (readpassphrase("Password: ", dbpass, sizeof(dbpass),
             RPP_REQUIRE_TTY) == NULL) {
-        return error("reading password failed");
+        err = error_create("reading password failed");
+        goto quit;
     }
     if (strlen(dbpass) < 3) {
-        return error("password too short");
+        err = error_create("password too short");
+        goto quit;
     }
 
-    return cmd->exec(cargc, cargv);
+    err = cmd->exec(cargc, cargv);
+
+quit:
+    if (err) {
+        if (err->msg) {
+            fprintf(stderr, "%s: %s\n", prog, err->msg);
+        }
+        error_destroy(err);
+
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
 }
