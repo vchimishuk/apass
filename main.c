@@ -14,10 +14,11 @@
 #include "mem.h"
 #include "rand.h"
 
+#define PROG "apass"
+#define CLIP "xclip -selection clipboard -wait 5"
 #define DEFAULT_PASS_LEN 24
 #define PASS_BUF_LEN 256
 
-static char *prog = "apass";
 static char dbpass[PASS_BUF_LEN];
 
 static bool yesno(char *msg)
@@ -55,35 +56,70 @@ static char *password(char *prompt, char *repeat_prompt)
     return mem_strdup(buf);
 }
 
+static char *clip_cmd(void)
+{
+    char *clip = getenv("APASS_CLIP");
+    if (clip) {
+        return mem_strdup(clip);
+    }
+
+    return mem_strdup(CLIP);
+}
+
+static struct error *clip_copy(char *s)
+{
+    struct error *err = NULL;
+    char *cmd = clip_cmd();
+    FILE *p = popen(cmd, "w");
+    if (p == NULL) {
+        err = error_create_std();
+        goto quit;
+    }
+
+    int n = fprintf(p, "%s", s);
+    if (n < 0) {
+        err = error_create_std();
+        goto quit;
+    }
+
+quit:
+    mem_free(cmd);
+    if (p) {
+        pclose(p);
+    }
+
+    return err;
+}
+
 static void print_usage_get(void)
 {
-    fprintf(stderr, "usage: %s get [-A] [-a attribute] name\n", prog);
+    fprintf(stderr, "usage: %s get [-A] [-a attribute] [-c] name\n", PROG);
 }
 
 static void print_usage_list(void)
 {
-    fprintf(stderr, "usage: %s list\n", prog);
+    fprintf(stderr, "usage: %s list\n", PROG);
 }
 
 static void print_usage_pass(void)
 {
-    fprintf(stderr, "usage: %s pass\n", prog);
+    fprintf(stderr, "usage: %s pass\n", PROG);
 }
 
 static void print_usage_remove(void)
 {
-    fprintf(stderr, "usage: %s remove name\n", prog);
+    fprintf(stderr, "usage: %s remove name\n", PROG);
 }
 
 static void print_usage_rename(void)
 {
-    fprintf(stderr, "usage: %s rename oldname newname\n", prog);
+    fprintf(stderr, "usage: %s rename oldname newname\n", PROG);
 }
 
 static void print_usage_set(void)
 {
     fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-S] "
-        "name\n", prog);
+        "name\n", PROG);
 }
 
 static char *home_dir(void)
@@ -140,7 +176,7 @@ static char *db_file(void)
     if (!xdg) {
         prdir = mem_strcat(prdir, ".");
     }
-    prdir = mem_strcat(prdir, prog);
+    prdir = mem_strcat(prdir, PROG);
 
     if (access(prdir, F_OK) != 0) {
         if (mkdir(prdir, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
@@ -150,7 +186,7 @@ static char *db_file(void)
     }
 
     prdir = mem_strcat(prdir, "/");
-    prdir = mem_strcat(prdir, prog);
+    prdir = mem_strcat(prdir, PROG);
     prdir = mem_strcat(prdir, ".db");
 
     return prdir;
@@ -181,17 +217,26 @@ static char *sanitize_value(char *s)
 
 static struct error *cmd_get(int argc, char **argv)
 {
+    const size_t bufsz = 1024;
+    size_t bufoff = 0;
+    char buf[bufsz];
+    int n;
+
     bool all = false;
+    bool clip = false;
     char *attr = NULL;
 
     int ch;
-    while ((ch = getopt(argc, argv, "Aa:")) != -1) {
+    while ((ch = getopt(argc, argv, "Aa:c")) != -1) {
         switch (ch) {
         case 'A':
             all = true;
             break;
         case 'a':
             attr = optarg;
+            break;
+        case 'c':
+            clip = true;
             break;
         default:
             print_usage_get();
@@ -226,17 +271,46 @@ static struct error *cmd_get(int argc, char **argv)
         goto quit;
     }
 
+    buf[0] = '\0';
     if (all || attr == NULL) {
-        printf("%s\n", rec->pass);
+        n = snprintf(buf + bufoff, bufsz - bufoff, "%s", rec->pass);
+        if (bufoff > bufsz) {
+            die("snprintf");
+        }
+        bufoff += n;
     }
     for (size_t i = 0; i < rec->attrs->size; i++) {
         struct attr *a = array_get(rec->attrs, i);
+        if (all && i == 0) {
+            bufoff += snprintf(buf + bufoff, bufsz - bufoff, "\n");
+            if (bufoff > bufsz) {
+                die("snprintf");
+            }
+        }
         if (all) {
-            printf("%s=", a->name);
+            bufoff += snprintf(buf + bufoff, bufsz - bufoff, "%s=", a->name);
+            if (bufoff > bufsz) {
+                die("snprintf");
+            }
         }
         if (all || (attr && strcmp(a->name, attr) == 0)) {
-            printf("%s\n", a->val);
+            bufoff += snprintf(buf + bufoff, bufsz - bufoff, "%s", a->val);
+            if (bufoff > bufsz) {
+                die("snprintf");
+            }
         }
+        if (all && i < rec->attrs->size - 1) {
+            bufoff += snprintf(buf + bufoff, bufsz - bufoff, "\n");
+            if (bufoff > bufsz) {
+                die("snprintf");
+            }
+        }
+    }
+
+    if (clip) {
+        clip_copy(buf);
+    } else {
+        printf("%s\n", buf);
     }
 
 quit:
@@ -534,7 +608,7 @@ static struct error *cmd_set(int argc, char **argv)
         char *name = array_get(attr_names, i);
         struct attr *attr = NULL;
 
-        for (size_t j = 0; rec->attrs->size; j++) {
+        for (size_t j = 0; j < rec->attrs->size; j++) {
             struct attr *a = array_get(rec->attrs, j);
             if (strcmp(a->name, name) == 0) {
                 attr = a;
@@ -643,7 +717,7 @@ int main(int argc, char **argv)
 quit:
     if (err) {
         if (err->msg) {
-            fprintf(stderr, "%s: %s\n", prog, err->msg);
+            fprintf(stderr, "%s: %s\n", PROG, err->msg);
         }
         error_destroy(err);
 
