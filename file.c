@@ -19,12 +19,31 @@
 
 static void serialize(char **buf, size_t *size, struct array *recs)
 {
+    struct tm *tm;
+    size_t n;
+    char tbuf[256];
+
+    *buf = NULL;
     for (size_t i = 0; i < recs->size; i++) {
         struct record *r = array_get(recs, i);
         mem_append(buf, size, r->name);
         mem_append(buf, size, "\n");
         mem_append(buf, size, r->pass);
         mem_append(buf, size, "\n");
+
+        tm = localtime(&r->created);
+        n = strftime(tbuf, sizeof(tbuf), "%s\n", tm);
+        if (n == 0) {
+            die("strftime");
+        }
+        mem_append(buf, size, tbuf);
+
+        tm = localtime(&r->modified);
+        n = strftime(tbuf, sizeof(tbuf), "%s\n", tm);
+        if (n == 0) {
+            die("strftime");
+        }
+        mem_append(buf, size, tbuf);
 
         for (size_t j = 0; j < r->attrs->size; j++) {
             struct attr *a = array_get(r->attrs, j);
@@ -41,6 +60,7 @@ static void serialize(char **buf, size_t *size, struct array *recs)
 struct error *deserialize(char *buf, size_t size, struct array **recs)
 {
     struct error *err = NULL;
+    struct tm tm;
     char *p = buf;
     int s = size;
     int n;
@@ -59,6 +79,10 @@ struct error *deserialize(char *buf, size_t size, struct array **recs)
         }
 
         n = mem_nfind(p, s, '\n');
+        if (n <= 0) {
+            err = error_create("invalid file format");
+            goto quit;
+        }
         r->pass = mem_strndup(p, n);
         p += n + 1;
         s -= n + 1;
@@ -66,6 +90,32 @@ struct error *deserialize(char *buf, size_t size, struct array **recs)
             err = error_create("invalid file format");
             goto quit;
         }
+
+        n = mem_nfind(p, s, '\n');
+        if (n <= 0) {
+            err = error_create("invalid file format");
+            goto quit;
+        }
+        if (strptime(p, "%s", &tm) == NULL) {
+            err = error_create("invalid file format");
+            goto quit;
+        }
+        r->created = mktime(&tm);
+        p += n + 1;
+        s -= n + 1;
+
+        n = mem_nfind(p, s, '\n');
+        if (n <= 0) {
+            err = error_create("invalid file format");
+            goto quit;
+        }
+        if (strptime(p, "%s", &tm) == NULL) {
+            err = error_create("invalid file format");
+            goto quit;
+        }
+        r->modified = mktime(&tm);
+        p += n + 1;
+        s -= n + 1;
 
         while ((n = mem_nfind(p, s, '\n')) != -1) {
             if (n == 0) {

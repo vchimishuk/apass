@@ -12,6 +12,8 @@ struct attr {
 struct record {
     char *name;
     char *pass;
+    time_t created;
+    time_t modified;
     struct array *attrs;
 };
 

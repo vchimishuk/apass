@@ -18,6 +18,7 @@
 #define CLIP "xclip -selection clipboard -wait 5"
 #define DEFAULT_PASS_LEN 24
 #define PASS_BUF_LEN 256
+#define TIME_FMT "%a %b %e %T %Z %Y"
 
 static char dbpass[PASS_BUF_LEN];
 
@@ -94,6 +95,11 @@ quit:
 static void print_usage_get(void)
 {
     fprintf(stderr, "usage: %s get [-A] [-a attribute] [-c] name\n", PROG);
+}
+
+static void print_usage_info(void)
+{
+    fprintf(stderr, "usage: %s info name\n", PROG);
 }
 
 static void print_usage_list(void)
@@ -312,6 +318,53 @@ static struct error *cmd_get(int argc, char **argv)
     } else {
         printf("%s\n", buf);
     }
+
+quit:
+    mem_free(fname);
+    file_free_records(recs);
+
+    return err;
+}
+
+static struct error *cmd_info(int argc, char **argv)
+{
+    if (argc != 2) {
+        print_usage_info();
+        return error_create_silent();
+    }
+
+    struct error *err = NULL;
+    struct array *recs = NULL;
+    char *name = argv[1];
+    char *fname = db_file();
+    char buf[256];
+    struct tm *tm;
+
+    err = file_read(fname, dbpass, &recs);
+    if (err) {
+        return err;
+    }
+
+    struct record *rec = NULL;
+    for (size_t i = 0; i < recs->size; i++) {
+        struct record *r = array_get(recs, i);
+        if (strcmp(r->name, name) == 0) {
+            rec = r;
+            break;
+        }
+    }
+    if (rec == NULL) {
+        err = error_create("%s: no such record", name);
+        goto quit;
+    }
+
+    tm = localtime(&rec->created);
+    strftime(buf, sizeof(buf), TIME_FMT, tm);
+    printf("Creation time: %s\n", buf);
+
+    tm = localtime(&rec->modified);
+    strftime(buf, sizeof(buf), TIME_FMT, tm);
+    printf("Modification time: %s\n", buf);
 
 quit:
     mem_free(fname);
@@ -561,6 +614,8 @@ static struct error *cmd_set(int argc, char **argv)
         rec = mem_malloc(sizeof(struct record));
         rec->name = mem_strdup(name);
         rec->pass = NULL;
+        rec->created = time(NULL);
+        rec->modified = rec->created;
         rec->attrs = array_create();
         array_append(recs, rec);
 
@@ -602,6 +657,7 @@ static struct error *cmd_set(int argc, char **argv)
         }
         mem_free(rec->pass);
         rec->pass = pass;
+        rec->modified = time(NULL);
     }
 
     for (size_t i = 0; i < attr_names->size; i++) {
@@ -657,6 +713,7 @@ struct command {
 
 struct command commands[] = {
     {"get", cmd_get},
+    {"info", cmd_info},
     {"list", cmd_list},
     {"pass", cmd_pass},
     {"remove", cmd_remove},
@@ -702,6 +759,7 @@ int main(int argc, char **argv)
 
     umask(S_IWGRP | S_IRGRP | S_IWOTH | S_IROTH);
 
+    // TODO: Move password read into cmd_* functions.
     if (readpassphrase("Password: ", dbpass, sizeof(dbpass),
             RPP_REQUIRE_TTY) == NULL) {
         err = error_create("reading password failed");
