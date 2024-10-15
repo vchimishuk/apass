@@ -92,6 +92,11 @@ quit:
     return err;
 }
 
+static void print_usage(void)
+{
+    fprintf(stderr, "usage: %s [-h] [-v] [command [opts] [args]]\n", PROG);
+}
+
 static void print_usage_get(void)
 {
     fprintf(stderr, "usage: %s get [-A] [-a attribute] [-c] name\n", PROG);
@@ -221,6 +226,19 @@ static char *sanitize_value(char *s)
     return p;
 }
 
+static struct error *readpassword(void)
+{
+    if (readpassphrase("Password: ", dbpass, sizeof(dbpass),
+            RPP_REQUIRE_TTY) == NULL) {
+        return error_create("reading password failed");
+    }
+    if (strlen(dbpass) < 3) {
+        return error_create("password too short");
+    }
+
+    return NULL;
+}
+
 static struct error *cmd_get(int argc, char **argv)
 {
     const size_t bufsz = 1024;
@@ -258,6 +276,11 @@ static struct error *cmd_get(int argc, char **argv)
     char *fname = db_file();
     struct array *recs = NULL;
     struct error *err = NULL;
+
+    err = readpassword();
+    if (err) {
+        goto quit;
+    }
 
     err = file_read(fname, dbpass, &recs);
     if (err) {
@@ -340,9 +363,14 @@ static struct error *cmd_info(int argc, char **argv)
     char buf[256];
     struct tm *tm;
 
+    err = readpassword();
+    if (err) {
+        goto quit;
+    }
+
     err = file_read(fname, dbpass, &recs);
     if (err) {
-        return err;
+        goto quit;
     }
 
     struct record *rec = NULL;
@@ -380,13 +408,18 @@ static struct error *cmd_list(int argc, __attribute__((unused)) char **argv)
         return error_create_silent();
     }
 
-    char *fname = db_file();
+    struct error *err;
     struct array *recs = NULL;
+    char *fname = db_file();
 
-    struct error *err = file_read(fname, dbpass, &recs);
-    mem_free(fname);
+    err = readpassword();
     if (err) {
-        return err;
+        goto quit;
+    }
+
+    err = file_read(fname, dbpass, &recs);
+    if (err) {
+        goto quit;
     }
 
     for (size_t i = 0; i < recs->size; i++) {
@@ -394,9 +427,11 @@ static struct error *cmd_list(int argc, __attribute__((unused)) char **argv)
         printf("%s\n", r->name);
     }
 
+quit:
+    mem_free(fname);
     file_free_records(recs);
 
-    return NULL;
+    return err;
 }
 
 static struct error *cmd_pass(int argc, __attribute__((unused)) char **argv)
@@ -410,6 +445,11 @@ static struct error *cmd_pass(int argc, __attribute__((unused)) char **argv)
     char *fname = db_file();
     char *pass = NULL;
     struct array *recs = NULL;
+
+    err = readpassword();
+    if (err) {
+        goto quit;
+    }
 
     err = file_read(fname, dbpass, &recs);
     if (err) {
@@ -448,6 +488,11 @@ static struct error *cmd_remove(int argc, char **argv)
     char *name = argv[1];
     char *fname = NULL;
     struct array *recs = NULL;
+
+    err = readpassword();
+    if (err) {
+        goto quit;
+    }
 
     fname = db_file();
     err = file_read(fname, dbpass, &recs);
@@ -494,6 +539,11 @@ static struct error *cmd_rename(int argc, char **argv)
     struct error *err = NULL;
     struct array *recs = NULL;
     char *fname = db_file();
+
+    err = readpassword();
+    if (err) {
+        goto quit;
+    }
 
     err = file_read(fname, dbpass, &recs);
     if (err) {
@@ -594,6 +644,11 @@ static struct error *cmd_set(int argc, char **argv)
     char *name = argv[optind];
     if (!valid_name(name)) {
         err = error_create("%s: invalid name", name);
+        goto quit;
+    }
+
+    err = readpassword();
+    if (err) {
         goto quit;
     }
 
@@ -736,8 +791,8 @@ static struct command *find_command(char *name)
 int main(int argc, char **argv)
 {
     if (argc == 1) {
-        die("TODO: usage()");
-        // TODO: goto quit;
+        print_usage();
+        return EXIT_FAILURE;
     }
 
     struct error *err = NULL;
@@ -750,8 +805,7 @@ int main(int argc, char **argv)
     } else {
         cmd = find_command("get");
         if (cmd == NULL) {
-            die("TODO: usage()");
-            // TODO: goto quit;
+            die("find_command");
         }
         cargc = argc;
         cargv = argv;
@@ -759,20 +813,7 @@ int main(int argc, char **argv)
 
     umask(S_IWGRP | S_IRGRP | S_IWOTH | S_IROTH);
 
-    // TODO: Move password read into cmd_* functions.
-    if (readpassphrase("Password: ", dbpass, sizeof(dbpass),
-            RPP_REQUIRE_TTY) == NULL) {
-        err = error_create("reading password failed");
-        goto quit;
-    }
-    if (strlen(dbpass) < 3) {
-        err = error_create("password too short");
-        goto quit;
-    }
-
     err = cmd->exec(cargc, cargv);
-
-quit:
     if (err) {
         if (err->msg) {
             fprintf(stderr, "%s: %s\n", PROG, err->msg);
