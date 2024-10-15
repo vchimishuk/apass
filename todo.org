@@ -1,0 +1,29 @@
+* TODO Man page.
+* TODO FreeBSD package.
+* TODO OpenBSD package.
+* TODO Debian package.
+* TODO Archlinux package.
+* TODO Markdown readme.
+* TODO Check with Valgrind.
+* TODO -h
+* TODO -v
+* TODO Remove attribute.
+* TODO Create autotests.
+* TODO Improve args parsing.
+       $ ./apass -a x=x bar
+       $ ./apass -A bar
+       scsrlbmy
+       $
+* TODO Remember password for some time.
+* DONE Address all TODO: in the code.
+* DONE Clipboard support.
+* DONE Support custom DB file.
+* DONE Dynamic arrays.
+* DONE Looks like we need to replace char* with void* in most places.
+* DONE Replace most die() with return error, free resources.
+       At least we need to return erro when password is not valid.
+* DONE Sanitise name and attributes.
+* DONE Save password creation and modification time.
+       Add info command?
+* DONE Reorganise code in a way that declarations go first and all
+       mem_free() calls after quit: label.
