@@ -15,6 +15,7 @@
 #include "rand.h"
 
 #define PROG "apass"
+#define VERSION "0.1.0"
 #define CLIP "xclip -selection clipboard -wait 5"
 #define DEFAULT_PASS_LEN 24
 #define PASS_BUF_LEN 256
@@ -92,9 +93,14 @@ quit:
     return err;
 }
 
+static void print_version(void)
+{
+    fprintf(stdout, "%s %s\n", PROG, VERSION);
+}
+
 static void print_usage(void)
 {
-    fprintf(stderr, "usage: %s [-h] [-v] [command [opts] [args]]\n", PROG);
+    fprintf(stderr, "usage: %s [-h] [-v] [command [opt ...] [args ...]]\n", PROG);
 }
 
 static void print_usage_get(void)
@@ -793,6 +799,16 @@ int main(int argc, char **argv)
     if (argc == 1) {
         print_usage();
         return EXIT_FAILURE;
+    }
+
+    if (strcmp("-h", argv[1]) == 0) {
+        print_usage();
+        return EXIT_SUCCESS;
+    }
+
+    if (strcmp("-v", argv[1]) == 0) {
+        print_version();
+        return EXIT_SUCCESS;
     }
 
     struct error *err = NULL;
