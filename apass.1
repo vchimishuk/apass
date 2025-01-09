@@ -1,0 +1,150 @@
+.Dd January 6, 2025
+.Dt APASS 1
+.Os
+.Sh NAME
+.Nm apass
+.Nd passwords manager with attributes support
+.Sh SYNOPSIS
+.Bk -words
+.Bl -tag -width apass
+.It Nm
+.Op Fl hv
+.Oo Ar command
+.Op Ar opt ...
+.Op Ar arg ...
+.Oc
+.El
+.Ek
+.Sh DESCRIPTION
+.Nm apass
+is a simple passwords manager. It stores data in single encrypted DB-file
+protected by password. In addition to the password
+.Nm apass
+allows to store arbitrary number of attributes attached to the name (account).
+.Sh OPTIONS
+The following options are supported by
+.Nm :
+.Bl -tag -width indent
+.It Fl h
+Display usage information and exit.
+.It Fl v
+Display version information and exit.
+.El
+.Sh COMMANDS
+The commands are supported by
+.Nm :
+.Bl -tag -width remove
+.It Xo
+.Cm get
+.Op Fl cA
+.Op Fl a Ar attr
+.Ar name
+.Xc
+Print password or/and attributes for the given secret name.
+.Pp
+The options for
+.Cm apass get
+are as follows:
+.Bl -tag -width Ds
+.It Fl A
+Output not only password but also all the attributes associated with the
+password.
+.It Fl a Ar attr
+Output only an attribute named
+.Ar attr .
+.It Fl c
+Copy output into clipboard instead of writing to stdout. By default
+.Cm xclip
+command is used for that. It is possible to specify another command using
+.Ev APASS_CLIP
+environment variable.
+.El
+.It Cm info Ar name
+Print additional information for the given secret name. Printed output includes
+such information as secret creation and modification time.
+.It Cm list
+Print name of all secrets in the storage.
+.It Cm pass
+Change storage password. Password is read from tty.
+.It Cm remove Ar name
+Remove the secret for the given name.
+.It Cm rename Ar oldname Ar newname
+Rename record named by
+.Ar oldname
+to
+.Ar newname .
+.It Xo
+.Cm set
+.Op Fl gpS
+.Op Fl a Ar name=value
+.Op Fl l Ar length
+.Ar name
+.Xc
+Create new record or edit the existing one. When setting new password for the
+existing record use will be asked to confirm the action to prevent incidental
+overwrites.
+.Pp
+The options for
+.Cm apass set
+are as follows:
+.Bl -tag -width Ds
+.It Fl a Ar name=value
+Set attribute named
+.Ar name
+associated with the secret to value
+.Ar value .
+.Fl a
+flag can be repeated multiple times to set more than one attribute using only
+one command.
+.It Fl g
+Generate password automatically instead of reading user input.
+.It Fl l Ar length
+Specify length of the password to generate if
+.Fl g
+is used. Default to 24.
+.It Fl p
+When
+.Fl a
+flag is specified password is not updated.
+.Fl p
+makes if force to set also the password.
+.It Fl S
+Do not use special symbols (like ~, !, +, _, [) when generate password, use only
+[A-Za-z0-9] characters.
+.El
+.El
+.Sh ENVIRONMENT
+.Bl -tag -width APASS_CLIP
+.It Ev APASS_CLIP
+Command to use to copy data into clipboard.
+.It Ev APASS_DB
+File to store data to.
+.Nm apass
+stores all the data encrypted in this single file.
+.El
+.Sh FILES
+.Bl -tag -width packed-refs -compact
+.It Pa ${XDG_DATA_HOME}/apass/apass.db
+.It Pa ~/.local/share/apass/apass.db
+Default location where
+.Nm apass
+looks for the storage file.
+.El
+.Sh EXAMPLES
+Create new secret for website.com and specify associated login and email attributes.
+.Pp
+.Dl $ apass set -a login=username -a username@mail.box website.com
+.Pp
+Print password associated with website.com.
+.Pp
+.Dl $ apass website.com
+.Pp
+Copy password for website.com to clipboard.
+.Pp
+.Dl $ apass get -c website.com
+.Pp
+Print all information associated with website.com.
+.Pp
+.Dl $ apass get -A website.com
+.Sh AUTHORS
+.An Viacheslav Chimishuk Aq vchimishuk@yandex.ru

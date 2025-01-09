@@ -100,12 +100,12 @@ static void print_version(void)
 
 static void print_usage(void)
 {
-    fprintf(stderr, "usage: %s [-h] [-v] [command [opt ...] [args ...]]\n", PROG);
+    fprintf(stderr, "usage: %s [-hv] [command [opt ...] [arg ...]]\n", PROG);
 }
 
 static void print_usage_get(void)
 {
-    fprintf(stderr, "usage: %s get [-A] [-a attribute] [-c] name\n", PROG);
+    fprintf(stderr, "usage: %s get [-cA] [-a attr] name\n", PROG);
 }
 
 static void print_usage_info(void)
@@ -135,7 +135,7 @@ static void print_usage_rename(void)
 
 static void print_usage_set(void)
 {
-    fprintf(stderr, "usage: %s set [-a attribute=value] [-g] [-l] [-p] [-S] "
+    fprintf(stderr, "usage: %s set [-gpS] [-a name=value] [-l length] "
         "name\n", PROG);
 }
 
