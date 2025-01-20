@@ -3,6 +3,10 @@
 ### Documentation
 See man page `apass(1)` for details.
 
+### FAQ
+**Q:** How it is different from [password-store](https://www.passwordstore.org)?\
+**A:** The main difference is that `password-store` keeps list of your secret names open, `apass` keeps it encrypted. Another major feature of `pass` is a convenient attributes management. Arbitrary list of attributes can be associated with every secret.
+
 ### Examples
 Create new secret for websitecom and specify associated login and email attributes.
 ```shell
