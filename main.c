@@ -590,6 +590,7 @@ static struct error *cmd_set(int argc, char **argv)
     bool setpass = false;
     bool sym = true;
     long len = DEFAULT_PASS_LEN;
+    char *endptr = NULL;
 
     struct array *attr_names = array_create();
     struct array *attr_vals = array_create();
@@ -616,8 +617,8 @@ static struct error *cmd_set(int argc, char **argv)
             generate = true;
             break;
         case 'l':
-            len = strtol(optarg, NULL, 10);
-            if (errno != 0 || len < 1 || len > 256) {
+            len = strtol(optarg, &endptr, 10);
+            if (*endptr != '\0' || len < 1 || len > 256) {
                 return error_create("%s: invalid length", optarg);
             }
             break;
