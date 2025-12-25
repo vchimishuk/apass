@@ -5,24 +5,24 @@ See man page `apass(1)` for details.
 
 ### FAQ
 **Q:** How it is different from [password-store](https://www.passwordstore.org)?\
-**A:** The main difference is that `password-store` keeps list of your secret names open, `apass` keeps it encrypted. Another major feature of `pass` is a convenient attributes management. Arbitrary list of attributes can be associated with every secret.
+**A:** The main difference is that `password-store` keeps list of your secret names open, `apass` keeps it encrypted. Another major feature of `apass` is a convenient attributes management. Arbitrary list of attributes can be associated with every secret.
 
 ### Examples
-Create new secret for websitecom and specify associated login and email attributes.
+Create new secret for website.com and specify associated login and email attributes.
 ```shell
-$ apass set -a login=username -a username@mail.box websitecom
+$ apass set -a login=username -a username@mail.box website.com
 ```
-Print password associated with websitecom.
+Print password associated with website.com.
 ```shell
-$ apass websitecom
+$ apass website.com
 ```
-Copy password for websitecom to clipboard.
+Copy password for website.com to clipboard.
 ```shell
-$ apass get -c websitecom
+$ apass get -c website.com
 ```
-Print all information associated with websitecom.
+Print all information associated with website.com.
 ```shell
-$ apass get -A websitecom
+$ apass get -A website.com
 ```
 
 ### Build and run
