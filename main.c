@@ -16,7 +16,7 @@
 
 #define PROG "apass"
 #define VERSION "0.1.0"
-#define CLIP "xclip -selection clipboard -wait 5"
+#define CLIP "xclip -wait 5"
 #define DEFAULT_PASS_LEN 24
 #define PASS_BUF_LEN 256
 #define TIME_FMT "%a %b %e %T %Z %Y"
