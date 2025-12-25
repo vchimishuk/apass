@@ -14,7 +14,7 @@ LIB_DEPENDS=	libgcrypt.so:security/libgcrypt
 USE_GITHUB=	yes
 GH_ACCOUNT=	vchimishuk
 GH_PROJECT=	${PORTNAME}
-GH_TAGNAME=	27a85ed
+GH_TAGNAME=	786a633
 
 PLIST_FILES=	bin/${PORTNAME} \
 		share/man/man1/apass.1.gz
